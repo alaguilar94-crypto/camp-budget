@@ -1312,6 +1312,25 @@ function openPDFModal() {
   document.getElementById('pdfModal').classList.add('open');
 }
 
+
+// ── PDF helper: remove emoji that break PDF fonts ──
+function stripEmoji(str) {
+  if (!str) return '';
+  // Map known meal icons to short text labels
+  const iconMap = {
+    '🍕': '[Pizza]', '🍔': '[Burgers]', '🍝': '[Pasta]',
+    '🍎': '[Snacks]', '🌮': '[Tacos]', '🍳': '[Breakfast]',
+    '🥞': '[Breakfast]', '☕': '[Coffee]', '🥗': '[Salad]',
+  };
+  let result = str;
+  Object.entries(iconMap).forEach(([emoji, label]) => {
+    result = result.replace(emoji, label);
+  });
+  // Strip any remaining emoji/non-Latin characters
+  result = result.replace(/[^\x00-\x7F]/g, '').trim();
+  return result;
+}
+
 function generatePDF() {
   const opts = {
     coverPage:        document.getElementById('pdf_coverPage').checked,
@@ -1331,7 +1350,7 @@ function generatePDF() {
   const ML = 48, MR = PW - 48, MT = 48;
   const CONTENT_W = MR - ML;
 
-  // ── Colour palette ──
+  // -- Colour palette --
   const C = {
     bg:      [15, 18, 9],
     green:   [91, 173, 122],
@@ -1360,7 +1379,7 @@ function generatePDF() {
   function addPageFooter(note) {
     doc.setFontSize(8);
     doc.setTextColor(...C.text2);
-    const footerText = note || `${SETTINGS.eventName} · ${SETTINGS.eventDates}`;
+    const footerText = stripEmoji(note || `${SETTINGS.eventName} - ${SETTINGS.eventDates}`);
     doc.text(footerText, ML, PH - 24);
     doc.text(`Page ${pageNum}`, MR, PH - 24, { align: 'right' });
     // Footer line
@@ -1397,9 +1416,9 @@ function generatePDF() {
   const gt = grandTotal();
   const gtBuf = gt * (1 + SETTINGS.buffer);
 
-  // ═══════════════════════════════
-  // PAGE 1 — COVER
-  // ═══════════════════════════════
+  // -------------------------------
+  // PAGE 1 -- COVER
+  // -------------------------------
   if (opts.coverPage) {
     let y = newPage();
 
@@ -1409,15 +1428,18 @@ function generatePDF() {
 
     // Camp emoji / icon area
     y = 80;
-    doc.setFontSize(40);
-    doc.text('🏕️', PW / 2, y, { align: 'center' });
+    // Tent icon replaced with styled text (emoji unsupported in PDF fonts)
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.green);
+    doc.text('MEAL BUDGET REPORT', PW / 2, y, { align: 'center' });
 
     // Event name
     y += 52;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(28);
     doc.setTextColor(...C.text);
-    doc.text(SETTINGS.eventName, PW / 2, y, { align: 'center' });
+    doc.text(stripEmoji(SETTINGS.eventName), PW / 2, y, { align: 'center' });
 
     // Subtitle
     y += 26;
@@ -1436,7 +1458,7 @@ function generatePDF() {
     y += 22;
     doc.setFontSize(11);
     doc.setTextColor(...C.text2);
-    doc.text(`${SETTINGS.eventDates}  ·  ${SETTINGS.eventGuests} guests`, PW / 2, y, { align: 'center' });
+    doc.text(`${stripEmoji(SETTINGS.eventDates)}  -  ${SETTINGS.eventGuests} guests`, PW / 2, y, { align: 'center' });
 
     // Grand total hero
     y += 56;
@@ -1499,7 +1521,7 @@ function generatePDF() {
       const items = state[id] || [];
       const priced = items.filter(i=>i.unitPrice>0).length;
       return [
-        `${meal.icon}  ${meal.name}`,
+        `${stripEmoji(meal.icon)} ${meal.name}`,
         meal.date,
         `${priced}/${items.length} priced`,
         fmt(total),
@@ -1531,9 +1553,9 @@ function generatePDF() {
     });
   }
 
-  // ═══════════════════════════════
+  // -------------------------------
   // MEAL DETAIL PAGES
-  // ═══════════════════════════════
+  // -------------------------------
   if (opts.mealBreakdown || opts.ingredientDetail) {
     Object.entries(MEALS_DEF).forEach(([mealId, meal]) => {
       let y = newPage();
@@ -1548,7 +1570,7 @@ function generatePDF() {
       doc.setFontSize(22);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...C.text);
-      doc.text(`${meal.icon}  ${meal.name}`, ML + 18, y + 22);
+      doc.text(`${stripEmoji(meal.icon)} ${meal.name}`, ML + 18, y + 22);
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -1571,15 +1593,15 @@ function generatePDF() {
         const items = state[mealId] || [];
         const rows = items.map(ing => {
           const lineTotal = ing.qtyToBuy * ing.unitPrice;
-          const status = ing.labattId ? '✓' : '—';
+          const status = ing.labattId ? 'Y' : '-';
           return [
-            ing.name,
-            ing.labattId || '—',
-            ing.packSize || '—',
+            stripEmoji(ing.name),
+            ing.labattId || '--',
+            stripEmoji(ing.packSize || '--'),
             ing.qtyToBuy.toString(),
-            ing.unit,
-            ing.unitPrice > 0 ? `$${ing.unitPrice.toFixed(2)}` : '—',
-            lineTotal > 0 ? fmt(lineTotal) : '—',
+            stripEmoji(ing.unit),
+            ing.unitPrice > 0 ? `$${ing.unitPrice.toFixed(2)}` : '--',
+            lineTotal > 0 ? fmt(lineTotal) : '--',
             status,
           ];
         });
@@ -1593,7 +1615,7 @@ function generatePDF() {
 
         doc.autoTable({
           startY: y,
-          head: [['Ingredient', 'Item #', 'Pack Size', 'Qty', 'Unit', 'Unit Price', 'Total', '✓']],
+          head: [['Ingredient', 'Item #', 'Pack Size', 'Qty', 'Unit', 'Unit Price', 'Total', 'OK']],
           body: rows,
           margin: { left: ML, right: 48 },
           styles: {
@@ -1622,9 +1644,9 @@ function generatePDF() {
     });
   }
 
-  // ═══════════════════════════════
+  // -------------------------------
   // ORDER SUMMARY PAGE
-  // ═══════════════════════════════
+  // -------------------------------
   if (opts.orderSummary) {
     let y = newPage();
 
@@ -1636,7 +1658,7 @@ function generatePDF() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.text2);
-    doc.text('All Labatt items · sorted by item number · deduplicated', ML, y + 34);
+    doc.text('All Labatt items - sorted by item number - deduplicated', ML, y + 34);
     y += 54;
 
     // Build order items
@@ -1652,7 +1674,7 @@ function generatePDF() {
               meals: [], totalQty: 0,
             };
           }
-          itemMap[ing.labattId].meals.push(MEALS_DEF[mealId]?.name || mealId);
+          itemMap[ing.labattId].meals.push(stripEmoji(MEALS_DEF[mealId]?.name || mealId));
           itemMap[ing.labattId].totalQty += ing.qtyToBuy;
         } else if (opts.unmatched) {
           unmatchedItems.push({ ...ing, mealName: MEALS_DEF[mealId]?.name });
@@ -1665,8 +1687,8 @@ function generatePDF() {
 
     const orderRows = sorted.map(item => [
       item.id,
-      item.name,
-      item.packSize,
+      stripEmoji(item.name),
+      stripEmoji(item.packSize),
       [...new Set(item.meals)].join(', '),
       item.totalQty.toString(),
       `$${item.unitPrice.toFixed(2)}`,
@@ -1715,24 +1737,24 @@ function generatePDF() {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(212, 91, 91);
-      doc.text(`⚠  ${unmatchedItems.length} items without Labatt matches — source separately`, ML + 12, y + 14);
+      doc.text(`! ${unmatchedItems.length} items without Labatt matches -- source separately`, ML + 12, y + 14);
       y += 30;
 
       unmatchedItems.forEach(ing => {
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...C.text2);
-        doc.text(`• ${ing.name}  (${ing.mealName})${ing.note ? '  — ' + ing.note : ''}`, ML + 8, y);
+        doc.text(stripEmoji(`- ${ing.name}  (${ing.mealName})${ing.note ? '  - ' + ing.note : ''}`), ML + 8, y);
         y += 16;
       });
     }
   }
 
-  // ── Save ──
+  // -- Save --
   const filename = `${SETTINGS.eventName.replace(/\s+/g,'_')}_Budget_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(filename);
 
   closeModal('pdfModal');
-  logActivity('📄', `Exported PDF: "${filename}"`);
+  logActivity('', `Exported PDF: "${filename}"`);
   showNotif(`PDF downloaded: ${filename}`, 'ok');
 }
