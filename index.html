@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +7,8 @@
 <title>CampBudget — Meal Planning Suite</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -116,7 +119,8 @@
       </div>
       <div class="header-actions">
         <button class="btn btn-outline" onclick="batchAIMatch()">🤖 AI Match All</button>
-        <button class="btn btn-outline" onclick="exportMealCSV()">⬇️ Export</button>
+        <button class="btn btn-outline" onclick="openPDFModal()">📄 PDF Summary</button>
+        <button class="btn btn-outline" onclick="exportMealCSV()">⬇️ Export CSV</button>
       </div>
     </div>
 
@@ -216,6 +220,7 @@
         <p class="page-sub">Consolidated Labatt order · sorted by item number</p>
       </div>
       <div class="header-actions">
+        <button class="btn btn-primary" onclick="openPDFModal()">📄 Export PDF</button>
         <button class="btn btn-outline" onclick="printOrderSheet()">🖨️ Print</button>
         <button class="btn btn-outline" onclick="exportOrderCSV()">⬇️ CSV</button>
         <button class="btn btn-primary" onclick="exportToSheets()">📊 Send to Sheets</button>
@@ -353,5 +358,157 @@
 
 <script src="data.js"></script>
 <script src="app.js"></script>
+
+<!-- EDIT DRAWER — Manual product entry -->
+<div class="drawer-overlay" id="editDrawerOverlay" onclick="closeEditDrawer()"></div>
+<div class="edit-drawer" id="editDrawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="editDrawerTitle">Edit Ingredient</div>
+      <div class="drawer-sub" id="editDrawerMeal"></div>
+    </div>
+    <button class="drawer-close" onclick="closeEditDrawer()">×</button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- Ingredient name -->
+    <div class="drawer-section">
+      <label class="drawer-label">Ingredient Name <span class="drawer-required">*</span></label>
+      <input class="drawer-input" id="ed_name" type="text" placeholder="e.g. Swiss Cheese, Shredded"
+        oninput="populateDrawerSuggestions(this.value)">
+    </div>
+
+    <!-- Catalog suggestions -->
+    <div id="ed_suggestions" class="ed-suggestions"></div>
+
+    <!-- Labatt product info -->
+    <div class="drawer-section">
+      <div class="drawer-section-title">Labatt Product Info</div>
+      <div class="drawer-field-row">
+        <div>
+          <label class="drawer-label">Item Number</label>
+          <input class="drawer-input" id="ed_labattId" type="text" placeholder="e.g. 8665690">
+        </div>
+        <div>
+          <label class="drawer-label">Pack Size</label>
+          <input class="drawer-input" id="ed_packSize" type="text" placeholder="e.g. 1/5 LB">
+        </div>
+      </div>
+      <label class="drawer-label">Product Description (as it appears in Labatt)</label>
+      <input class="drawer-input" id="ed_labattName" type="text" placeholder="e.g. Cheese, Swiss Shredded">
+    </div>
+
+    <!-- Purchasing -->
+    <div class="drawer-section">
+      <div class="drawer-section-title">Purchasing</div>
+      <div class="drawer-field-row">
+        <div>
+          <label class="drawer-label">Qty to Buy</label>
+          <input class="drawer-input" id="ed_qtyToBuy" type="number" min="0" step="0.5" placeholder="1"
+            oninput="updateDrawerTotal()">
+        </div>
+        <div>
+          <label class="drawer-label">Unit</label>
+          <input class="drawer-input" id="ed_unit" type="text" placeholder="case / each / gal / lb">
+        </div>
+        <div>
+          <label class="drawer-label">Unit Price ($)</label>
+          <input class="drawer-input" id="ed_unitPrice" type="number" min="0" step="0.01" placeholder="0.00"
+            oninput="updateDrawerTotal()">
+        </div>
+      </div>
+      <div class="drawer-total-row">
+        <span class="drawer-total-label">Line Total</span>
+        <span class="drawer-total-amt" id="ed_lineTotal">—</span>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="drawer-section">
+      <div class="drawer-section-title">Notes</div>
+      <textarea class="drawer-input drawer-textarea" id="ed_note"
+        placeholder="e.g. Need 5 lbs, buying 1/5 lb bag — leftover usable for Sunday tacos"></textarea>
+    </div>
+
+    <!-- Shared toggle -->
+    <div class="drawer-section">
+      <div class="drawer-shared-row">
+        <div>
+          <div class="drawer-label">Shared ingredient</div>
+          <div class="drawer-hint">Used in multiple meals — split cost across meals</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="ed_isShared">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="drawer-footer">
+    <button class="btn btn-ghost" onclick="closeEditDrawer()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEditDrawer()">Save Changes</button>
+  </div>
+</div>
+
+
+<!-- PDF EXPORT MODAL -->
+<div class="modal-overlay" id="pdfModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📄 Export Budget as PDF</div>
+      <button class="modal-close" onclick="closeModal('pdfModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">Choose what to include in your PDF summary.</p>
+
+      <div class="pdf-options">
+        <div class="pdf-option-group">
+          <div class="pdf-option-label">Content</div>
+          <label class="pdf-check"><input type="checkbox" id="pdf_coverPage" checked> Cover page with event summary</label>
+          <label class="pdf-check"><input type="checkbox" id="pdf_mealBreakdown" checked> Per-meal cost breakdown</label>
+          <label class="pdf-check"><input type="checkbox" id="pdf_ingredientDetail" checked> Ingredient detail per meal</label>
+          <label class="pdf-check"><input type="checkbox" id="pdf_orderSummary" checked> Consolidated order summary</label>
+          <label class="pdf-check"><input type="checkbox" id="pdf_unmatched"> Unmatched / source-separately items</label>
+        </div>
+
+        <div class="pdf-option-group">
+          <div class="pdf-option-label">Layout</div>
+          <div class="pdf-radio-row">
+            <label class="pdf-radio"><input type="radio" name="pdf_orient" value="portrait" checked> Portrait</label>
+            <label class="pdf-radio"><input type="radio" name="pdf_orient" value="landscape"> Landscape</label>
+          </div>
+        </div>
+
+        <div class="pdf-option-group">
+          <div class="pdf-option-label">Footer note (optional)</div>
+          <input type="text" class="field-input" id="pdf_footer" placeholder="e.g. Prepared by Kitchen Team · Confidential">
+        </div>
+      </div>
+
+      <div class="pdf-preview-strip" id="pdfPreviewStrip">
+        <div class="pdf-preview-card">
+          <div class="pdf-preview-icon">📋</div>
+          <div class="pdf-preview-label">Cover</div>
+        </div>
+        <div class="pdf-preview-card">
+          <div class="pdf-preview-icon">🍽️</div>
+          <div class="pdf-preview-label">Meals</div>
+        </div>
+        <div class="pdf-preview-card">
+          <div class="pdf-preview-icon">📦</div>
+          <div class="pdf-preview-label">Order</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('pdfModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="generatePDF()">⬇️ Download PDF</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
