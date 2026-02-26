@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CampBudget — Meal Planning Suite</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- SIDEBAR NAV -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">🏕️</div>
+    <div class="brand-text">
+      <div class="brand-name">CampBudget</div>
+      <div class="brand-sub">Meal Planning Suite</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+      <span class="nav-icon">⬛</span> Dashboard
+    </a>
+
+    <div class="nav-section-label">Planning</div>
+    <a class="nav-item" data-page="planner" onclick="navigate('planner')">
+      <span class="nav-icon">📋</span> Meal Planner
+    </a>
+    <a class="nav-item" data-page="shared" onclick="navigate('shared')">
+      <span class="nav-icon">🔀</span> Shared Ingredients
+    </a>
+    <a class="nav-item" data-page="catalog" onclick="navigate('catalog')">
+      <span class="nav-icon">🏪</span> Catalog Browser
+    </a>
+
+    <div class="nav-section-label">Output</div>
+    <a class="nav-item" data-page="ordersheet" onclick="navigate('ordersheet')">
+      <span class="nav-icon">📄</span> Order Sheet
+    </a>
+    <a class="nav-item" data-page="history" onclick="navigate('history')">
+      <span class="nav-icon">📚</span> Budget History
+    </a>
+
+    <div class="nav-section-label">System</div>
+    <a class="nav-item" data-page="settings" onclick="navigate('settings')">
+      <span class="nav-icon">⚙️</span> Settings
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="event-chip" id="sidebarEvent">
+      <div class="event-chip-label">Current Event</div>
+      <div class="event-chip-name" id="sidebarEventName">Family Immersion Camp</div>
+      <div class="event-chip-date" id="sidebarEventDate">Jul 17–19, 2026 · 160 guests</div>
+    </div>
+    <div class="sidebar-total">
+      <div class="sidebar-total-label">Grand Total</div>
+      <div class="sidebar-total-amt" id="sidebarTotal">$0.00</div>
+      <div class="sidebar-total-buffer" id="sidebarBuffer">+10% buffer: $0.00</div>
+    </div>
+    <div class="save-status" id="saveStatus">● Auto-saved</div>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main-content" id="mainContent">
+
+  <!-- NOTIFICATION BAR -->
+  <div class="notif-bar" id="notifBar" style="display:none">
+    <span id="notifMsg"></span>
+    <button onclick="dismissNotif()">×</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: DASHBOARD                             -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">Family Immersion Camp · July 17–19, 2026</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="newEvent()">+ New Event</button>
+        <button class="btn btn-primary" onclick="navigate('planner')">Open Planner →</button>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stats-row" id="dashStats"></div>
+
+    <!-- Meals summary grid -->
+    <div class="section-title">Meals at a Glance</div>
+    <div class="meals-grid" id="dashMealsGrid"></div>
+
+    <!-- Notifications -->
+    <div class="section-title">Alerts</div>
+    <div class="alerts-list" id="dashAlerts"></div>
+
+    <!-- Recent activity -->
+    <div class="section-title">Recent Activity</div>
+    <div class="activity-list" id="dashActivity"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: MEAL PLANNER                          -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-planner">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Meal Planner</h1>
+        <p class="page-sub" id="plannerSub">Loading…</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="batchAIMatch()">🤖 AI Match All</button>
+        <button class="btn btn-outline" onclick="exportMealCSV()">⬇️ Export</button>
+      </div>
+    </div>
+
+    <div class="planner-layout">
+      <!-- Meal tabs left -->
+      <div class="meal-tabs" id="mealTabs"></div>
+
+      <!-- Ingredient area center -->
+      <div class="planner-center">
+        <div class="meal-header-bar" id="mealHeaderBar"></div>
+        <div class="col-headers-row">
+          <div class="ch ch-name">Ingredient</div>
+          <div class="ch ch-num">Qty</div>
+          <div class="ch ch-unit">Unit</div>
+          <div class="ch ch-price">Unit Price</div>
+          <div class="ch ch-total">Line Total</div>
+          <div class="ch ch-actions"></div>
+        </div>
+        <div id="ingredientList"></div>
+        <button class="add-row-btn" onclick="addIngredient()">＋ Add ingredient</button>
+      </div>
+
+      <!-- Catalog right -->
+      <div class="catalog-sidebar">
+        <div class="catalog-sidebar-header">
+          <div class="cs-title">Labatt Catalog <span class="cs-count" id="catalogCount"></span></div>
+          <div class="search-wrap">
+            <input type="text" class="cs-search" id="catalogSearch" placeholder="Search 532 products…" oninput="filterCatalog()">
+          </div>
+          <div class="cat-pills" id="catPills"></div>
+        </div>
+        <div class="catalog-list" id="catalogList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: SHARED INGREDIENTS                    -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-shared">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Shared Ingredients</h1>
+        <p class="page-sub">Allocate costs across multiple meals to avoid double-counting</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="autoDetectShared()">✨ Auto-detect</button>
+      </div>
+    </div>
+    <div id="sharedContent"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: CATALOG BROWSER                       -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-catalog">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Catalog Browser</h1>
+        <p class="page-sub">532 Labatt products · 6-month velocity report through Feb 2026</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="uploadNewCatalog()">⬆️ Update Catalog</button>
+      </div>
+    </div>
+
+    <div class="catalog-page-search">
+      <input type="text" class="big-search" id="catalogPageSearch" placeholder="Search by name, brand, item number…" oninput="filterCatalogPage()">
+      <div class="cat-pills" id="catPillsPage"></div>
+    </div>
+
+    <div class="catalog-table-wrap">
+      <table class="catalog-table" id="catalogTable">
+        <thead>
+          <tr>
+            <th onclick="sortCatalog('id')">Item # ↕</th>
+            <th onclick="sortCatalog('label')">Brand ↕</th>
+            <th onclick="sortCatalog('description')">Description ↕</th>
+            <th onclick="sortCatalog('packSize')">Pack Size ↕</th>
+            <th onclick="sortCatalog('category')">Category ↕</th>
+            <th onclick="sortCatalog('price')">Price ↕</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="catalogTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: ORDER SHEET                           -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-ordersheet">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Order Sheet</h1>
+        <p class="page-sub">Consolidated Labatt order · sorted by item number</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" onclick="printOrderSheet()">🖨️ Print</button>
+        <button class="btn btn-outline" onclick="exportOrderCSV()">⬇️ CSV</button>
+        <button class="btn btn-primary" onclick="exportToSheets()">📊 Send to Sheets</button>
+      </div>
+    </div>
+    <div id="orderSheetContent"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: BUDGET HISTORY                        -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-history">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Budget History</h1>
+        <p class="page-sub">Compare events over time · track price changes</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="saveCurrentBudget()">💾 Save Current Budget</button>
+      </div>
+    </div>
+    <div id="historyContent"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- PAGE: SETTINGS                              -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="page" id="page-settings">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-sub">Configure integrations, event details, and preferences</p>
+      </div>
+    </div>
+    <div id="settingsContent"></div>
+  </div>
+
+</main>
+
+<!-- AI MATCH MODAL -->
+<div class="modal-overlay" id="aiModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div class="modal-title">🤖 AI Ingredient Matcher</div>
+      <button class="modal-close" onclick="closeModal('aiModal')">×</button>
+    </div>
+    <div class="modal-body" id="aiModalBody">
+      <div class="ai-intro">
+        <p>Describe what you need in plain English and AI will find the best Labatt match, explain its reasoning, and suggest alternatives.</p>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" class="ai-input" id="aiSearchInput" placeholder="e.g. 'fresh shredded swiss cheese for quiche'" onkeydown="if(event.key==='Enter')runAIMatch()">
+        <button class="btn btn-primary" onclick="runAIMatch()">Match</button>
+      </div>
+      <div id="aiResults"></div>
+    </div>
+    <div class="modal-footer">
+      <div class="ai-key-note" id="aiKeyNote"></div>
+      <button class="btn btn-ghost" onclick="closeModal('aiModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Export Budget Data</div>
+      <button class="modal-close" onclick="closeModal('exportModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">CSV of all meals with Labatt items, quantities, and costs.</p>
+      <pre class="export-preview" id="exportPreview"></pre>
+    </div>
+    <div class="modal-footer">
+      <span class="copy-flash" id="copyFlash">✓ Copied!</span>
+      <button class="btn btn-ghost" onclick="closeModal('exportModal')">Cancel</button>
+      <button class="btn btn-outline" onclick="copyExport()">📋 Copy</button>
+      <button class="btn btn-primary" onclick="downloadExport()">⬇️ Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- SAVE BUDGET MODAL -->
+<div class="modal-overlay" id="saveModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">💾 Save Budget</div>
+      <button class="modal-close" onclick="closeModal('saveModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Event Name</label>
+      <input type="text" class="field-input" id="saveEventName" placeholder="e.g. Family Immersion Camp Summer 2026">
+      <label class="field-label" style="margin-top:14px">Notes (optional)</label>
+      <textarea class="field-input" id="saveNotes" rows="3" placeholder="Any notes about this budget…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('saveModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmSave()">Save Budget</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW EVENT MODAL -->
+<div class="modal-overlay" id="newEventModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">+ New Event</div>
+      <button class="modal-close" onclick="closeModal('newEventModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Event Name</label>
+      <input type="text" class="field-input" id="newEventName" placeholder="e.g. Fall Leadership Retreat">
+      <div class="field-row">
+        <div>
+          <label class="field-label">Start Date</label>
+          <input type="date" class="field-input" id="newEventStart">
+        </div>
+        <div>
+          <label class="field-label">End Date</label>
+          <input type="date" class="field-input" id="newEventEnd">
+        </div>
+      </div>
+      <label class="field-label">Number of Guests</label>
+      <input type="number" class="field-input" id="newEventGuests" placeholder="160" value="160">
+      <label class="field-label" style="margin-top:14px">Meals to Plan</label>
+      <div class="meal-checkboxes" id="newEventMeals"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('newEventModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createNewEvent()">Create Event</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
