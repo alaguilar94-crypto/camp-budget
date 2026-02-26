@@ -6,7 +6,7 @@
 
 // ── SETTINGS & INTEGRATIONS ──────────────────────────────────
 const SETTINGS = {
-  anthropicKey:   localStorage.getItem('cb_anthropic_key') || '',
+  anthropicKey:   localStorage.getItem('cb_anthropic_key') || 'ANTHROPIC_KEY_PLACEHOLDER',
   sheetsUrl:      localStorage.getItem('cb_sheets_url') || '',
   driveFolder:    localStorage.getItem('cb_drive_folder') || '',
   eventName:      localStorage.getItem('cb_event_name') || 'Family Immersion Camp',
@@ -273,13 +273,17 @@ function renderMealIngredients() {
     const lineTotal = ing.qtyToBuy * ing.unitPrice;
     const status = ing.labattId ? 'matched' : (findPartialMatches(ing.name).length > 0 ? 'partial' : 'unmatched');
     const sharedCls = ing.isShared ? ' shared-ing' : '';
-    return `<div class="ing-row ${status}${sharedCls}" id="ingRow-${idx}" onclick="focusIngredient(${idx})">
+    const emptyCls = !ing.name ? ' empty-row' : '';
+    return `<div class="ing-row ${status}${sharedCls}${emptyCls}" id="ingRow-${idx}" onclick="focusIngredient(${idx})">
       <div class="ing-name-wrap">
-        <div class="ing-name">${ing.name}</div>
+        <input class="ing-name-input" type="text" value="${ing.name.replace(/"/g,'&quot;')}"
+          onchange="updateField(${idx},'name',this.value)"
+          onclick="event.stopPropagation()"
+          placeholder="Ingredient name">
         <div class="ing-meta">
           <span class="ing-badge ${status}">${status==='matched'?'✓ Matched':status==='partial'?'~ In catalog':'✗ Not found'}</span>
           ${ing.isShared?'<span class="ing-badge shared">shared</span>':''}
-          <span class="ing-labatt" title="${ing.labattName||ing.note}">${ing.labattName||ing.note}</span>
+          <span class="ing-labatt" title="${ing.labattName||ing.note}">${ing.labattName||ing.note||'—'}</span>
         </div>
       </div>
       <input class="ing-input" type="number" value="${ing.qtyToBuy}" min="0" step="0.5"
@@ -293,8 +297,8 @@ function renderMealIngredients() {
         onclick="event.stopPropagation()">
       <div class="ing-total">${lineTotal > 0 ? fmt(lineTotal) : '—'}</div>
       <div class="ing-actions">
+        <button class="ing-btn edit" title="Edit all details" onclick="event.stopPropagation();openEditDrawer(${idx})">✏️</button>
         <button class="ing-btn ai" title="AI Match" onclick="event.stopPropagation();openAIModal(${idx})">🤖</button>
-        <button class="ing-btn" title="Mark as shared" onclick="event.stopPropagation();toggleShared(${idx})">🔀</button>
         <button class="ing-btn delete" title="Delete" onclick="event.stopPropagation();deleteIngredient(${idx})">×</button>
       </div>
     </div>`;
@@ -326,9 +330,127 @@ function deleteIngredient(idx) {
 }
 
 function addIngredient() {
-  state[activeMeal].push({ name:'New ingredient', unit:'case', qtyToBuy:1, unitPrice:0, note:'', labattId:'', labattName:'', packSize:'', isShared:false });
+  state[activeMeal].push({ name:'', unit:'case', qtyToBuy:1, unitPrice:0, note:'', labattId:'', labattName:'', packSize:'', isShared:false });
   renderMealIngredients();
-  focusIngredient(state[activeMeal].length - 1);
+  const newIdx = state[activeMeal].length - 1;
+  focusIngredient(newIdx);
+  // Auto-open the full edit drawer so user can fill in all details
+  setTimeout(() => openEditDrawer(newIdx), 50);
+}
+
+
+// ══════════════════════════════════
+// EDIT DRAWER — Manual product entry
+// ══════════════════════════════════
+function openEditDrawer(idx) {
+  focusedIngIdx = idx;
+  const ing = state[activeMeal][idx];
+  const meal = MEALS_DEF[activeMeal];
+
+  // Build drawer HTML
+  document.getElementById('editDrawerTitle').textContent = ing.name ? `Edit: ${ing.name}` : '+ Add Ingredient';
+  document.getElementById('editDrawerMeal').textContent = meal.name;
+
+  // Populate all fields
+  document.getElementById('ed_name').value       = ing.name       || '';
+  document.getElementById('ed_labattId').value   = ing.labattId   || '';
+  document.getElementById('ed_labattName').value = ing.labattName || '';
+  document.getElementById('ed_packSize').value   = ing.packSize   || '';
+  document.getElementById('ed_qtyToBuy').value   = ing.qtyToBuy   || '';
+  document.getElementById('ed_unit').value       = ing.unit       || 'case';
+  document.getElementById('ed_unitPrice').value  = ing.unitPrice  || '';
+  document.getElementById('ed_note').value       = ing.note       || '';
+  document.getElementById('ed_isShared').checked = ing.isShared   || false;
+
+  // Update line total preview
+  updateDrawerTotal();
+
+  // Show catalog suggestions based on current name
+  populateDrawerSuggestions(ing.name);
+
+  // Open drawer
+  document.getElementById('editDrawer').classList.add('open');
+  document.getElementById('editDrawerOverlay').classList.add('open');
+  document.getElementById('ed_name').focus();
+  document.getElementById('ed_name').select();
+}
+
+function closeEditDrawer() {
+  document.getElementById('editDrawer').classList.remove('open');
+  document.getElementById('editDrawerOverlay').classList.remove('open');
+}
+
+function updateDrawerTotal() {
+  const qty   = parseFloat(document.getElementById('ed_qtyToBuy').value) || 0;
+  const price = parseFloat(document.getElementById('ed_unitPrice').value) || 0;
+  document.getElementById('ed_lineTotal').textContent = qty && price ? fmt(qty * price) : '—';
+}
+
+function saveEditDrawer() {
+  const idx = focusedIngIdx;
+  if (idx === null || idx === undefined) return;
+
+  const ing = state[activeMeal][idx];
+  ing.name       = document.getElementById('ed_name').value.trim()       || ing.name;
+  ing.labattId   = document.getElementById('ed_labattId').value.trim();
+  ing.labattName = document.getElementById('ed_labattName').value.trim();
+  ing.packSize   = document.getElementById('ed_packSize').value.trim();
+  ing.qtyToBuy   = parseFloat(document.getElementById('ed_qtyToBuy').value)  || 0;
+  ing.unit       = document.getElementById('ed_unit').value.trim()        || 'case';
+  ing.unitPrice  = parseFloat(document.getElementById('ed_unitPrice').value) || 0;
+  ing.note       = document.getElementById('ed_note').value.trim();
+  ing.isShared   = document.getElementById('ed_isShared').checked;
+
+  closeEditDrawer();
+  renderMealIngredients();
+  renderPlannerTabs();
+  updateSidebarTotals();
+  logActivity('✏️', `Edited "${ing.name}" in ${MEALS_DEF[activeMeal].name}`);
+}
+
+function populateDrawerSuggestions(query) {
+  if (!query || query === 'New ingredient') {
+    document.getElementById('ed_suggestions').innerHTML = '';
+    return;
+  }
+  const words = query.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>2);
+  const matches = LABATT_CATALOG.filter(item =>
+    words.some(w => item.description.toLowerCase().includes(w))
+  ).slice(0, 5);
+
+  document.getElementById('ed_suggestions').innerHTML = matches.length ? `
+    <div class="ed-suggestions-label">Labatt catalog suggestions — click to fill fields</div>
+    ${matches.map(item => `
+      <div class="ed-suggestion" onclick="applyDrawerSuggestion('${item.id}')">
+        <div class="ed-sug-name">${item.description}</div>
+        <div class="ed-sug-meta">
+          <span>${item.packSize}</span>
+          <span style="color:var(--accent)">${item.price > 0 ? '$'+item.price.toFixed(2) : 'No price'}</span>
+          <span style="color:var(--text3)">${item.label} · ${item.id}</span>
+        </div>
+      </div>`).join('')}` : '';
+}
+
+function applyDrawerSuggestion(labattId) {
+  const item = LABATT_CATALOG.find(c => c.id === labattId);
+  if (!item) return;
+  document.getElementById('ed_labattId').value   = item.id;
+  document.getElementById('ed_labattName').value = item.description;
+  document.getElementById('ed_packSize').value   = item.packSize;
+  if (item.price > 0) document.getElementById('ed_unitPrice').value = item.price;
+  updateDrawerTotal();
+  // Highlight applied suggestion
+  document.querySelectorAll('.ed-suggestion').forEach(el => el.classList.remove('applied'));
+  document.querySelector(`.ed-suggestion[onclick*="${labattId}"]`)?.classList.add('applied');
+}
+
+function clearLabattMatch(idx) {
+  const ing = state[activeMeal][idx];
+  ing.labattId = '';
+  ing.labattName = '';
+  ing.packSize = '';
+  renderMealIngredients();
+  logActivity('🗑️', `Cleared Labatt match for "${ing.name}"`);
 }
 
 function toggleShared(idx) {
@@ -1179,4 +1301,438 @@ function download(content, filename, type) {
 
 function uploadNewCatalog() {
   showNotif('To update the catalog, export a new CSV from your Labatt velocity report and upload it here to re-generate data.js.', 'info');
+}
+
+// ══════════════════════════════════
+// PDF EXPORT
+// ══════════════════════════════════
+function openPDFModal() {
+  // Pre-fill footer with event name
+  document.getElementById('pdf_footer').value = `Prepared for ${SETTINGS.eventName} · ${SETTINGS.eventDates}`;
+  document.getElementById('pdfModal').classList.add('open');
+}
+
+function generatePDF() {
+  const opts = {
+    coverPage:        document.getElementById('pdf_coverPage').checked,
+    mealBreakdown:    document.getElementById('pdf_mealBreakdown').checked,
+    ingredientDetail: document.getElementById('pdf_ingredientDetail').checked,
+    orderSummary:     document.getElementById('pdf_orderSummary').checked,
+    unmatched:        document.getElementById('pdf_unmatched').checked,
+    orientation:      document.querySelector('input[name="pdf_orient"]:checked').value,
+    footer:           document.getElementById('pdf_footer').value.trim(),
+  };
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: opts.orientation, unit: 'pt', format: 'letter' });
+
+  const PW = doc.internal.pageSize.getWidth();
+  const PH = doc.internal.pageSize.getHeight();
+  const ML = 48, MR = PW - 48, MT = 48;
+  const CONTENT_W = MR - ML;
+
+  // ── Colour palette ──
+  const C = {
+    bg:      [15, 18, 9],
+    green:   [91, 173, 122],
+    orange:  [196, 83, 10],
+    text:    [232, 227, 213],
+    text2:   [168, 159, 140],
+    surface: [23, 28, 16],
+    border:  [46, 56, 36],
+    white:   [255, 255, 255],
+    black:   [0, 0, 0],
+  };
+
+  let pageNum = 0;
+
+  // Helper: add a new page with dark background
+  function newPage() {
+    if (pageNum > 0) doc.addPage();
+    pageNum++;
+    doc.setFillColor(...C.bg);
+    doc.rect(0, 0, PW, PH, 'F');
+    addPageFooter(opts.footer);
+    return MT;
+  }
+
+  // Helper: footer on every page
+  function addPageFooter(note) {
+    doc.setFontSize(8);
+    doc.setTextColor(...C.text2);
+    const footerText = note || `${SETTINGS.eventName} · ${SETTINGS.eventDates}`;
+    doc.text(footerText, ML, PH - 24);
+    doc.text(`Page ${pageNum}`, MR, PH - 24, { align: 'right' });
+    // Footer line
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(0.5);
+    doc.line(ML, PH - 34, MR, PH - 34);
+  }
+
+  // Helper: section header bar
+  function sectionHeader(y, title, subtitle) {
+    doc.setFillColor(...C.surface);
+    doc.roundedRect(ML, y, CONTENT_W, 28, 4, 4, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.green);
+    doc.text(title, ML + 12, y + 18);
+    if (subtitle) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C.text2);
+      doc.text(subtitle, MR - 4, y + 18, { align: 'right' });
+    }
+    return y + 36;
+  }
+
+  // Helper: check if we need a new page
+  function checkPageBreak(y, needed) {
+    if (y + needed > PH - 60) {
+      y = newPage();
+    }
+    return y;
+  }
+
+  const gt = grandTotal();
+  const gtBuf = gt * (1 + SETTINGS.buffer);
+
+  // ═══════════════════════════════
+  // PAGE 1 — COVER
+  // ═══════════════════════════════
+  if (opts.coverPage) {
+    let y = newPage();
+
+    // Top accent bar
+    doc.setFillColor(...C.green);
+    doc.rect(0, 0, PW, 5, 'F');
+
+    // Camp emoji / icon area
+    y = 80;
+    doc.setFontSize(40);
+    doc.text('🏕️', PW / 2, y, { align: 'center' });
+
+    // Event name
+    y += 52;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(...C.text);
+    doc.text(SETTINGS.eventName, PW / 2, y, { align: 'center' });
+
+    // Subtitle
+    y += 26;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(13);
+    doc.setTextColor(...C.text2);
+    doc.text('Meal Budget Summary', PW / 2, y, { align: 'center' });
+
+    // Divider
+    y += 22;
+    doc.setDrawColor(...C.green);
+    doc.setLineWidth(1);
+    doc.line(PW/2 - 60, y, PW/2 + 60, y);
+
+    // Event meta
+    y += 22;
+    doc.setFontSize(11);
+    doc.setTextColor(...C.text2);
+    doc.text(`${SETTINGS.eventDates}  ·  ${SETTINGS.eventGuests} guests`, PW / 2, y, { align: 'center' });
+
+    // Grand total hero
+    y += 56;
+    doc.setFillColor(...C.surface);
+    doc.roundedRect(PW/2 - 130, y - 20, 260, 80, 8, 8, 'F');
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(1);
+    doc.roundedRect(PW/2 - 130, y - 20, 260, 80, 8, 8, 'S');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...C.text2);
+    doc.text('GRAND TOTAL', PW / 2, y + 4, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(36);
+    doc.setTextColor(...C.green);
+    doc.text(fmt(gt), PW / 2, y + 38, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...C.text2);
+    doc.text(`With ${(SETTINGS.buffer*100).toFixed(0)}% buffer: ${fmt(gtBuf)}`, PW / 2, y + 54, { align: 'center' });
+
+    // Stats row
+    y += 110;
+    const stats = [
+      { label: 'Cost/Guest', value: fmt(gt / SETTINGS.eventGuests) },
+      { label: 'Meals',      value: Object.keys(state).length.toString() },
+      { label: 'Line Items', value: Object.values(state).flat().length.toString() },
+      { label: 'Matched',    value: `${Object.values(state).flat().filter(i=>i.labattId).length} items` },
+    ];
+    const statW = CONTENT_W / 4;
+    stats.forEach((s, i) => {
+      const sx = ML + i * statW;
+      doc.setFillColor(...C.surface);
+      doc.roundedRect(sx + 4, y, statW - 8, 54, 5, 5, 'F');
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C.text2);
+      doc.text(s.label.toUpperCase(), sx + statW/2, y + 14, { align: 'center' });
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C.text);
+      doc.text(s.value, sx + statW/2, y + 38, { align: 'center' });
+    });
+
+    // Meal totals table on cover
+    y += 80;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...C.text2);
+    doc.text('MEAL BREAKDOWN', ML, y);
+    y += 14;
+
+    const mealRows = Object.entries(MEALS_DEF).map(([id, meal]) => {
+      const total = mealTotal(id);
+      const items = state[id] || [];
+      const priced = items.filter(i=>i.unitPrice>0).length;
+      return [
+        `${meal.icon}  ${meal.name}`,
+        meal.date,
+        `${priced}/${items.length} priced`,
+        fmt(total),
+        `$${(total / SETTINGS.eventGuests).toFixed(2)}/guest`,
+      ];
+    });
+
+    doc.autoTable({
+      startY: y,
+      head: [['Meal', 'Date', 'Progress', 'Total', 'Per Guest']],
+      body: mealRows,
+      margin: { left: ML, right: 48 },
+      styles: {
+        font: 'helvetica', fontSize: 10,
+        fillColor: C.surface, textColor: C.text,
+        lineColor: C.border, lineWidth: 0.5,
+      },
+      headStyles: {
+        fillColor: C.surface, textColor: C.green,
+        fontStyle: 'bold', fontSize: 9,
+        lineColor: C.border,
+      },
+      alternateRowStyles: { fillColor: [20, 25, 13] },
+      columnStyles: {
+        0: { cellWidth: 160 },
+        3: { textColor: C.green, fontStyle: 'bold', halign: 'right' },
+        4: { textColor: C.text2, halign: 'right' },
+      },
+    });
+  }
+
+  // ═══════════════════════════════
+  // MEAL DETAIL PAGES
+  // ═══════════════════════════════
+  if (opts.mealBreakdown || opts.ingredientDetail) {
+    Object.entries(MEALS_DEF).forEach(([mealId, meal]) => {
+      let y = newPage();
+
+      // Meal header
+      doc.setFillColor(...C.surface);
+      doc.roundedRect(ML, y, CONTENT_W, 52, 6, 6, 'F');
+      doc.setDrawColor(...C.green);
+      doc.setLineWidth(1.5);
+      doc.roundedRect(ML, y, 4, 52, 2, 2, 'F'); // left accent bar
+
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C.text);
+      doc.text(`${meal.icon}  ${meal.name}`, ML + 18, y + 22);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C.text2);
+      doc.text(meal.date, ML + 18, y + 38);
+
+      const mTotal = mealTotal(mealId);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C.green);
+      doc.text(fmt(mTotal), MR - 4, y + 26, { align: 'right' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C.text2);
+      doc.text(`$${(mTotal / SETTINGS.eventGuests).toFixed(2)} per guest`, MR - 4, y + 40, { align: 'right' });
+
+      y += 70;
+
+      if (opts.ingredientDetail) {
+        const items = state[mealId] || [];
+        const rows = items.map(ing => {
+          const lineTotal = ing.qtyToBuy * ing.unitPrice;
+          const status = ing.labattId ? '✓' : '—';
+          return [
+            ing.name,
+            ing.labattId || '—',
+            ing.packSize || '—',
+            ing.qtyToBuy.toString(),
+            ing.unit,
+            ing.unitPrice > 0 ? `$${ing.unitPrice.toFixed(2)}` : '—',
+            lineTotal > 0 ? fmt(lineTotal) : '—',
+            status,
+          ];
+        });
+
+        // Subtotal row
+        rows.push([
+          { content: 'MEAL TOTAL', colSpan: 6, styles: { fontStyle: 'bold', textColor: C.text2 } },
+          { content: fmt(mTotal), styles: { fontStyle: 'bold', textColor: C.green } },
+          '',
+        ]);
+
+        doc.autoTable({
+          startY: y,
+          head: [['Ingredient', 'Item #', 'Pack Size', 'Qty', 'Unit', 'Unit Price', 'Total', '✓']],
+          body: rows,
+          margin: { left: ML, right: 48 },
+          styles: {
+            font: 'helvetica', fontSize: 9,
+            fillColor: C.surface, textColor: C.text,
+            lineColor: C.border, lineWidth: 0.4,
+            cellPadding: 5,
+          },
+          headStyles: {
+            fillColor: [20, 25, 13], textColor: C.green,
+            fontStyle: 'bold', fontSize: 8,
+          },
+          alternateRowStyles: { fillColor: [18, 23, 11] },
+          columnStyles: {
+            0: { cellWidth: 140 },
+            1: { fontSize: 8, textColor: C.text2 },
+            2: { fontSize: 8, textColor: C.text2 },
+            3: { halign: 'center' },
+            4: { halign: 'center', fontSize: 8, textColor: C.text2 },
+            5: { halign: 'right' },
+            6: { halign: 'right', textColor: C.green, fontStyle: 'bold' },
+            7: { halign: 'center', fontSize: 8 },
+          },
+        });
+      }
+    });
+  }
+
+  // ═══════════════════════════════
+  // ORDER SUMMARY PAGE
+  // ═══════════════════════════════
+  if (opts.orderSummary) {
+    let y = newPage();
+
+    // Page title
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.text);
+    doc.text('Consolidated Order', ML, y + 16);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...C.text2);
+    doc.text('All Labatt items · sorted by item number · deduplicated', ML, y + 34);
+    y += 54;
+
+    // Build order items
+    const itemMap = {};
+    const unmatchedItems = [];
+    Object.entries(state).forEach(([mealId, items]) => {
+      items.forEach(ing => {
+        if (ing.labattId) {
+          if (!itemMap[ing.labattId]) {
+            itemMap[ing.labattId] = {
+              id: ing.labattId, name: ing.labattName,
+              packSize: ing.packSize, unitPrice: ing.unitPrice,
+              meals: [], totalQty: 0,
+            };
+          }
+          itemMap[ing.labattId].meals.push(MEALS_DEF[mealId]?.name || mealId);
+          itemMap[ing.labattId].totalQty += ing.qtyToBuy;
+        } else if (opts.unmatched) {
+          unmatchedItems.push({ ...ing, mealName: MEALS_DEF[mealId]?.name });
+        }
+      });
+    });
+
+    const sorted = Object.values(itemMap).sort((a, b) => a.id.localeCompare(b.id));
+    const orderTotal = sorted.reduce((s, i) => s + i.totalQty * i.unitPrice, 0);
+
+    const orderRows = sorted.map(item => [
+      item.id,
+      item.name,
+      item.packSize,
+      [...new Set(item.meals)].join(', '),
+      item.totalQty.toString(),
+      `$${item.unitPrice.toFixed(2)}`,
+      fmt(item.totalQty * item.unitPrice),
+    ]);
+
+    orderRows.push([
+      { content: 'ORDER TOTAL', colSpan: 6, styles: { fontStyle: 'bold', textColor: C.text2, halign: 'right' } },
+      { content: fmt(orderTotal), styles: { fontStyle: 'bold', textColor: C.green } },
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Item #', 'Description', 'Pack', 'Used In', 'Qty', 'Price', 'Total']],
+      body: orderRows,
+      margin: { left: ML, right: 48 },
+      styles: {
+        font: 'helvetica', fontSize: 9,
+        fillColor: C.surface, textColor: C.text,
+        lineColor: C.border, lineWidth: 0.4,
+        cellPadding: 5,
+      },
+      headStyles: {
+        fillColor: [20, 25, 13], textColor: C.green,
+        fontStyle: 'bold', fontSize: 8,
+      },
+      alternateRowStyles: { fillColor: [18, 23, 11] },
+      columnStyles: {
+        0: { cellWidth: 65, fontSize: 8, textColor: C.text2 },
+        1: { cellWidth: 160 },
+        2: { cellWidth: 60, fontSize: 8, textColor: C.text2 },
+        3: { fontSize: 8, textColor: C.text2 },
+        4: { halign: 'center', cellWidth: 36 },
+        5: { halign: 'right', cellWidth: 52 },
+        6: { halign: 'right', cellWidth: 64, textColor: C.green, fontStyle: 'bold' },
+      },
+    });
+
+    // Unmatched items
+    if (opts.unmatched && unmatchedItems.length > 0) {
+      y = doc.lastAutoTable.finalY + 24;
+      y = checkPageBreak(y, unmatchedItems.length * 18 + 40);
+
+      doc.setFillColor(40, 15, 15);
+      doc.roundedRect(ML, y, CONTENT_W, 22, 4, 4, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(212, 91, 91);
+      doc.text(`⚠  ${unmatchedItems.length} items without Labatt matches — source separately`, ML + 12, y + 14);
+      y += 30;
+
+      unmatchedItems.forEach(ing => {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...C.text2);
+        doc.text(`• ${ing.name}  (${ing.mealName})${ing.note ? '  — ' + ing.note : ''}`, ML + 8, y);
+        y += 16;
+      });
+    }
+  }
+
+  // ── Save ──
+  const filename = `${SETTINGS.eventName.replace(/\s+/g,'_')}_Budget_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
+
+  closeModal('pdfModal');
+  logActivity('📄', `Exported PDF: "${filename}"`);
+  showNotif(`PDF downloaded: ${filename}`, 'ok');
 }
