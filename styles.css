@@ -929,3 +929,276 @@ html, body {
   .catalog-sidebar { display: none; }
   .stats-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* ══════════════════════════════════
+   EDIT DRAWER
+══════════════════════════════════ */
+.drawer-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 150;
+  display: none;
+  backdrop-filter: blur(3px);
+}
+.drawer-overlay.open { display: block; }
+
+.edit-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 420px;
+  background: var(--surface);
+  border-left: 1px solid var(--border2);
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+}
+.edit-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+.drawer-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  color: var(--text);
+}
+.drawer-sub { font-size: 11px; color: var(--text3); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+.drawer-close {
+  background: none; border: none;
+  font-size: 22px; cursor: pointer;
+  color: var(--text3); transition: color 0.12s;
+  line-height: 1; padding: 0;
+}
+.drawer-close:hover { color: var(--text); }
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drawer-section {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.drawer-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+.drawer-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  display: block;
+  margin-bottom: 4px;
+}
+.drawer-required { color: var(--accent2); }
+.drawer-hint { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+.drawer-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  padding: 8px 11px;
+  transition: border-color 0.15s;
+}
+.drawer-input:focus { outline: none; border-color: var(--accent); }
+.drawer-input::placeholder { color: var(--text3); }
+.drawer-textarea { min-height: 72px; resize: vertical; font-family: 'Outfit', sans-serif; }
+
+.drawer-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.drawer-field-row:has(> div:nth-child(3)) { grid-template-columns: 1fr 1fr 1fr; }
+
+.drawer-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 11px;
+  background: var(--surface3);
+  border-radius: 6px;
+  margin-top: 2px;
+}
+.drawer-total-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.drawer-total-amt {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.drawer-shared-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Catalog suggestions inside drawer */
+.ed-suggestions { display: flex; flex-direction: column; gap: 3px; margin: -2px 0 2px; }
+.ed-suggestions-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  padding: 4px 0 2px;
+}
+.ed-suggestion {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.ed-suggestion:hover { border-color: var(--accent); background: rgba(124,184,122,0.06); }
+.ed-suggestion.applied { border-color: var(--accent); background: rgba(124,184,122,0.1); }
+.ed-sug-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.ed-sug-meta { display: flex; gap: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+/* Editable name input in ingredient row */
+.ing-name-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 4px;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.ing-name-input:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+  background: rgba(124,184,122,0.04);
+  border-radius: 3px 3px 0 0;
+}
+.ing-name-input::placeholder { color: var(--text3); font-weight: 400; }
+
+.drawer-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+
+/* Make edit button more discoverable */
+.ing-btn.edit {
+  color: var(--accent2);
+  background: rgba(212,129,58,0.08);
+}
+.ing-btn.edit:hover {
+  background: rgba(212,129,58,0.2);
+  color: var(--accent2);
+}
+/* Empty ingredient row — pulse to draw attention */
+.ing-row.empty-row {
+  border-style: dashed;
+  animation: pulseRow 1.5s ease 2;
+}
+@keyframes pulseRow {
+  0%, 100% { border-color: var(--border); }
+  50% { border-color: var(--accent); }
+}
+
+@media (max-width: 600px) {
+  .edit-drawer { width: 100%; }
+}
+
+/* ══════════════════════════════════
+   PDF EXPORT MODAL
+══════════════════════════════════ */
+.pdf-options { display: flex; flex-direction: column; gap: 14px; }
+
+.pdf-option-group {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px 16px;
+}
+.pdf-option-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+.pdf-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text2);
+  padding: 5px 0;
+  cursor: pointer;
+}
+.pdf-check input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+.pdf-check:hover { color: var(--text); }
+
+.pdf-radio-row { display: flex; gap: 20px; }
+.pdf-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+}
+.pdf-radio input { accent-color: var(--accent); cursor: pointer; }
+
+.pdf-preview-strip {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  justify-content: center;
+}
+.pdf-preview-card {
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  width: 64px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pdf-preview-icon { font-size: 22px; }
+.pdf-preview-label { font-size: 10px; color: var(--text3); }
