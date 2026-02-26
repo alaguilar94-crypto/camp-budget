@@ -1316,18 +1316,24 @@ function openPDFModal() {
 // ── PDF helper: remove emoji that break PDF fonts ──
 function stripEmoji(str) {
   if (!str) return '';
-  // Map known meal icons to short text labels
-  const iconMap = {
-    '🍕': '[Pizza]', '🍔': '[Burgers]', '🍝': '[Pasta]',
-    '🍎': '[Snacks]', '🌮': '[Tacos]', '🍳': '[Breakfast]',
-    '🥞': '[Breakfast]', '☕': '[Coffee]', '🥗': '[Salad]',
-  };
   let result = str;
-  Object.entries(iconMap).forEach(([emoji, label]) => {
-    result = result.replace(emoji, label);
-  });
-  // Strip any remaining emoji/non-Latin characters
-  result = result.replace(/[^\x00-\x7F]/g, '').trim();
+  // Preserve punctuation meaning before stripping
+  result = result.replace(/\u2013/g, '-');   // en-dash -> hyphen
+  result = result.replace(/\u2014/g, '--');  // em-dash -> double hyphen
+  result = result.replace(/\u00B7/g, '-');   // middle dot -> hyphen
+  result = result.replace(/\u2026/g, '...'); // ellipsis
+  result = result.replace(/\u2019/g, "'");   // right single quote
+  result = result.replace(/\u201C/g, '"');   // left double quote
+  result = result.replace(/\u201D/g, '"');   // right double quote
+  // Remove emoji via Unicode ranges (covers all emoji blocks)
+  result = result.replace(/[\u{1F300}-\u{1FAFF}]/gu, '');
+  result = result.replace(/[\u{2600}-\u{27BF}]/gu, '');
+  result = result.replace(/[\u{FE00}-\u{FEFF}]/gu, '');
+  result = result.replace(/[\u{1F000}-\u{1F02F}]/gu, '');
+  // Remove any remaining non-ASCII characters
+  result = result.replace(/[^\x20-\x7E]/g, '');
+  // Clean up extra spaces
+  result = result.replace(/\s+/g, ' ').trim();
   return result;
 }
 
